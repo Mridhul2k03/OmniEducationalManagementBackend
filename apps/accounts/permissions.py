@@ -19,15 +19,23 @@ def get_or_resolve_tenant(request):
     if not (hasattr(request, "user") and request.user and request.user.is_authenticated):
         return None
 
-    requested_tenant_id = request.headers.get("X-Tenant-ID")
+    raw_tenant_id = request.headers.get("X-Tenant-ID")
+    requested_tenant_id = str(raw_tenant_id).strip() if raw_tenant_id else None
+    if requested_tenant_id in ("", "null", "undefined", "None"):
+        requested_tenant_id = None
+
     if requested_tenant_id:
         try:
-            tenant_uuid = uuid.UUID(str(requested_tenant_id).strip())
+            tenant_uuid = uuid.UUID(requested_tenant_id)
+            superuser_lookup = {"id": tenant_uuid}
+            membership_lookup = {"tenant_id": tenant_uuid}
         except (ValueError, AttributeError):
-            return None
+            tenant_slug = requested_tenant_id.lower()
+            superuser_lookup = {"slug": tenant_slug}
+            membership_lookup = {"tenant__slug": tenant_slug}
 
         if request.user.is_superuser:
-            tenant = Tenant.objects.filter(id=tenant_uuid, is_deleted=False).first()
+            tenant = Tenant.objects.filter(**superuser_lookup, is_deleted=False).first()
             if tenant:
                 request.tenant = tenant
                 set_current_tenant(tenant)
@@ -36,9 +44,9 @@ def get_or_resolve_tenant(request):
 
         membership = Membership.objects.filter(
             user=request.user,
-            tenant_id=tenant_uuid,
             status=Membership.STATUS_ACTIVE,
             is_deleted=False,
+            **membership_lookup,
         ).select_related("tenant").first()
     else:
         membership = Membership.objects.filter(

@@ -21,6 +21,8 @@ api_v1_patterns = [
     path("academics/", include("apps.academics.urls")),
     # Students and Admissions
     path("students/", include("apps.students.urls")),
+    # Staff and Faculty
+    path("staff/", include("apps.staff.urls")),
     # Attendance Tracking
     path("attendance/", include("apps.attendance.urls")),
     # Examinations, Grading and Marks

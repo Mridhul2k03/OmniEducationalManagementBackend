@@ -58,31 +58,26 @@ class TenantContextMiddleware(MiddlewareMixin):
         from apps.accounts.models import Membership
         from apps.tenants.models import Tenant
 
-        requested_tenant_id = request.headers.get("X-Tenant-ID")
+        raw_tenant_id = request.headers.get("X-Tenant-ID")
+        requested_tenant_id = str(raw_tenant_id).strip() if raw_tenant_id else None
+        if requested_tenant_id in ("", "null", "undefined", "None"):
+            requested_tenant_id = None
 
         if requested_tenant_id:
             try:
-                # Validate UUID format
-                tenant_uuid = uuid.UUID(str(requested_tenant_id).strip())
+                # Check if provided identifier is a valid UUID
+                tenant_uuid = uuid.UUID(requested_tenant_id)
+                superuser_lookup = {"id": tenant_uuid}
+                membership_lookup = {"tenant_id": tenant_uuid}
             except (ValueError, AttributeError):
-                return JsonResponse(
-                    {
-                        "success": False,
-                        "error": {
-                            "code": "INVALID_TENANT_ID",
-                            "message": "The provided X-Tenant-ID header is not a valid UUID.",
-                            "details": None,
-                        },
-                        "meta": {
-                            "request_id": getattr(request, "request_id", None),
-                        }
-                    },
-                    status=400,
-                )
+                # Fallback to resolving by slug (e.g. 'oxford-crest')
+                tenant_slug = requested_tenant_id.lower()
+                superuser_lookup = {"slug": tenant_slug}
+                membership_lookup = {"tenant__slug": tenant_slug}
 
             # Superusers can access any active tenant
             if request.user.is_superuser:
-                tenant = Tenant.objects.filter(id=tenant_uuid, is_deleted=False).first()
+                tenant = Tenant.objects.filter(**superuser_lookup, is_deleted=False).first()
                 if not tenant:
                     return JsonResponse(
                         {
@@ -103,9 +98,9 @@ class TenantContextMiddleware(MiddlewareMixin):
             # Verify that the user has an active membership for the requested tenant
             membership = Membership.objects.filter(
                 user=request.user,
-                tenant_id=tenant_uuid,
                 status=Membership.STATUS_ACTIVE,
                 is_deleted=False,
+                **membership_lookup,
             ).select_related("tenant").first()
 
             if not membership:

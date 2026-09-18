@@ -38,11 +38,88 @@ class RegisterInstitutionView(APIView):
         )
 
 
+from django.conf import settings
+
+
+def set_auth_cookies(response, access_token=None, refresh_token=None):
+    """
+    Sets HttpOnly cookies on the response for cookie-based authentication.
+    """
+    secure = not settings.DEBUG
+    samesite = "Lax"
+    if access_token:
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=secure,
+            samesite=samesite,
+            max_age=3600,
+            path="/",
+        )
+    if refresh_token:
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=secure,
+            samesite=samesite,
+            max_age=7 * 86400,
+            path="/",
+        )
+    return response
+
+
 class CustomLoginView(TokenObtainPairView):
     """
-    User login issuing JWT access/refresh tokens with accessible tenant memberships.
+    User login issuing JWT access/refresh tokens with accessible tenant memberships,
+    and setting secure HttpOnly authentication cookies.
     """
     serializer_class = CustomTokenObtainPairSerializer
+
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == 200:
+            access_token = response.data.get("access")
+            refresh_token = response.data.get("refresh")
+            set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token)
+        return response
+
+
+class CustomTokenRefreshView(TokenRefreshView):
+    """
+    Refreshes access token, reading refresh token from request body or cookie,
+    and updating the HttpOnly access_token cookie.
+    """
+    def post(self, request, *args, **kwargs):
+        data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        if not data.get("refresh") and "refresh_token" in request.COOKIES:
+            data["refresh"] = request.COOKIES["refresh_token"]
+            request._full_data = data
+
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == 200:
+            access_token = response.data.get("access")
+            refresh_token = response.data.get("refresh")
+            set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token)
+        return response
+
+
+class LogoutView(APIView):
+    """
+    Logs out the user and clears all auth cookies.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        response = Response({
+            "success": True,
+            "message": "Logged out successfully."
+        }, status=status.HTTP_200_OK)
+        response.delete_cookie("access_token", path="/")
+        response.delete_cookie("refresh_token", path="/")
+        response.delete_cookie("sessionid", path="/")
+        return response
 
 
 class MeView(APIView):
@@ -96,11 +173,18 @@ class SwitchTenantView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        import uuid
+        try:
+            tenant_uuid = uuid.UUID(str(tenant_id).strip())
+            membership_filter = {"tenant_id": tenant_uuid}
+        except (ValueError, AttributeError):
+            membership_filter = {"tenant__slug": str(tenant_id).strip().lower()}
+
         membership = Membership.objects.filter(
             user=request.user,
-            tenant_id=tenant_id,
             status=Membership.STATUS_ACTIVE,
             is_deleted=False,
+            **membership_filter,
         ).select_related("tenant").first()
 
         if not membership and not request.user.is_superuser:

@@ -15,6 +15,10 @@ class StudentGuardianListSerializer(serializers.ModelSerializer):
 
 class StudentSerializer(serializers.ModelSerializer):
     guardian_links = StudentGuardianListSerializer(many=True, read_only=True)
+    email = serializers.CharField(source="user.email", read_only=True, default="")
+    user_id = serializers.UUIDField(source="user.id", read_only=True, default=None)
+    class_cohort_name = serializers.SerializerMethodField()
+    section_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Student
@@ -24,6 +28,10 @@ class StudentSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "full_name",
+            "email",
+            "user_id",
+            "class_cohort_name",
+            "section_name",
             "date_of_birth",
             "gender",
             "blood_group",
@@ -34,7 +42,15 @@ class StudentSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at", "email", "user_id"]
+
+    def get_class_cohort_name(self, obj):
+        latest = obj.enrollments.order_by("-enrolled_date").first()
+        return latest.class_cohort.name if latest else ""
+
+    def get_section_name(self, obj):
+        latest = obj.enrollments.order_by("-enrolled_date").first()
+        return latest.section.name if latest else ""
 
 
 class StudentAdmissionSerializer(serializers.Serializer):
@@ -45,6 +61,7 @@ class StudentAdmissionSerializer(serializers.Serializer):
     admission_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
     first_name = serializers.CharField(max_length=150)
     last_name = serializers.CharField(max_length=150)
+    email = serializers.EmailField(required=False, allow_blank=True)
     date_of_birth = serializers.DateField()
     gender = serializers.ChoiceField(choices=Student.GENDER_CHOICES)
     blood_group = serializers.CharField(max_length=10, required=False, allow_blank=True)
@@ -58,6 +75,8 @@ class StudentAdmissionSerializer(serializers.Serializer):
     academic_year_id = serializers.UUIDField(required=False)
     class_cohort_id = serializers.UUIDField(required=False)
     section_id = serializers.UUIDField(required=False)
+    class_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    section_name = serializers.CharField(max_length=50, required=False, allow_blank=True)
     roll_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
 
     def create(self, validated_data):
@@ -69,16 +88,18 @@ class StudentAdmissionSerializer(serializers.Serializer):
         academic_year_id = validated_data.pop("academic_year_id", None)
         class_cohort_id = validated_data.pop("class_cohort_id", None)
         section_id = validated_data.pop("section_id", None)
+        class_name = validated_data.pop("class_name", "")
+        section_name = validated_data.pop("section_name", "")
         roll_number = validated_data.pop("roll_number", "")
 
-        enrollment_data = None
-        if academic_year_id and class_cohort_id and section_id:
-            enrollment_data = {
-                "academic_year_id": academic_year_id,
-                "class_cohort_id": class_cohort_id,
-                "section_id": section_id,
-                "roll_number": roll_number,
-            }
+        enrollment_data = {
+            "academic_year_id": academic_year_id,
+            "class_cohort_id": class_cohort_id,
+            "section_id": section_id,
+            "class_name": class_name,
+            "section_name": section_name,
+            "roll_number": roll_number,
+        }
 
         student = admit_student_service(
             tenant=tenant,
