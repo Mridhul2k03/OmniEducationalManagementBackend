@@ -1,0 +1,7 @@
+-r base.txt
+
+# Testing & Quality
+pytest>=9.1.0
+pytest-django>=4.14.0
+factory-boy>=3.3.0
+Faker>=40.0.0
