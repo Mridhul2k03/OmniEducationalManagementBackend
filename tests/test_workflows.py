@@ -12,6 +12,7 @@ from apps.enrollments.models import Enrollment
 from apps.attendance.models import AttendanceRecord, AttendanceCorrectionRequest
 from apps.examinations.models import Exam, ExamSubject, Mark
 from apps.finance.models import FeeCategory, FeeStructure, Invoice, Payment
+from apps.staff.models import Staff
 from tests.conftest import get_auth_client
 
 
@@ -299,3 +300,52 @@ def test_finance_invoice_and_idempotent_payment_workflow(tenant_a, tenant_a_acco
     assert dup_pay_resp.status_code == status.HTTP_201_CREATED
     assert dup_pay_resp.json()["data"]["receipt_number"] == receipt_no
     assert Payment.objects.filter(idempotency_key=idempotency_key).count() == 1
+
+
+def test_staff_creation_and_duplicate_prevention(tenant_a, tenant_a_admin):
+    """
+    Test End-to-End Staff / Educator creation:
+    - Verifies staff profile, auto-generated email & employee ID
+    - Verifies duplicate email or existing user profile rejection with 400 Bad Request
+    """
+    client = get_auth_client(tenant_a_admin, tenant=tenant_a)
+
+    payload = {
+        "first_name": "Minerva",
+        "last_name": "McGonagall",
+        "email": "minerva.mcgonagall@hogwarts.edu",
+        "designation": "Professor of Transfiguration",
+        "qualification": "Master of Transfiguration",
+        "employment_type": "full_time",
+    }
+
+    # 1. Create Staff
+    res = client.post("/api/v1/staff/", payload, format="json")
+    assert res.status_code == status.HTTP_201_CREATED
+    data = res.json().get("data", res.json())
+    assert data["email"] == "minerva.mcgonagall@hogwarts.edu"
+    assert data["employee_id"].startswith("FAC-")
+    assert data["designation"] == "Professor of Transfiguration"
+
+    # Verify Database record
+    staff = Staff.objects.get(id=data["id"])
+    assert staff.tenant == tenant_a
+    assert staff.user.email == "minerva.mcgonagall@hogwarts.edu"
+
+    # 2. Re-submitting the exact same staff member / email must cleanly return 400 Validation Error
+    dup_res = client.post("/api/v1/staff/", payload, format="json")
+    assert dup_res.status_code == status.HTTP_400_BAD_REQUEST
+
+    # 3. Create another staff without providing an explicit email (auto-generated email)
+    auto_payload = {
+        "first_name": "Severus",
+        "last_name": "Snape",
+        "designation": "Potions Master",
+        "qualification": "Master of Potions",
+    }
+    res2 = client.post("/api/v1/staff/", auto_payload, format="json")
+    assert res2.status_code == status.HTTP_201_CREATED
+    data2 = res2.json().get("data", res2.json())
+    assert "@" in data2["email"]
+    assert data2["employee_id"] != data["employee_id"]
+

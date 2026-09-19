@@ -111,30 +111,54 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data = super().validate(attrs)
         user = self.user
 
-        # Get active memberships
-        memberships = Membership.objects.filter(
-            user=user,
-            status=Membership.STATUS_ACTIVE,
-            is_deleted=False,
-        ).select_related("tenant")
-
         accessible_tenants = []
         default_tenant = None
 
-        for m in memberships:
-            t_data = {
-                "id": str(m.tenant.id),
-                "name": m.tenant.name,
-                "slug": m.tenant.slug,
-                "institution_type": m.tenant.institution_type,
-                "is_default": m.is_default,
-            }
-            accessible_tenants.append(t_data)
-            if m.is_default and default_tenant is None:
-                default_tenant = t_data
+        if user.is_superuser:
+            all_tenants = Tenant.objects.filter(is_deleted=False)
+            for t in all_tenants:
+                t_data = {
+                    "id": str(t.id),
+                    "name": t.name,
+                    "slug": t.slug,
+                    "institution_type": t.institution_type,
+                    "currency": t.currency,
+                    "timezone": t.timezone,
+                    "is_default": False,
+                }
+                accessible_tenants.append(t_data)
+            if accessible_tenants:
+                accessible_tenants[0]["is_default"] = True
+                default_tenant = accessible_tenants[0]
+        else:
+            # Get active memberships
+            memberships = Membership.objects.filter(
+                user=user,
+                status=Membership.STATUS_ACTIVE,
+                is_deleted=False,
+            ).select_related("tenant")
 
-        if not default_tenant and accessible_tenants:
-            default_tenant = accessible_tenants[0]
+            for m in memberships:
+                t_data = {
+                    "id": str(m.tenant.id),
+                    "name": m.tenant.name,
+                    "slug": m.tenant.slug,
+                    "institution_type": m.tenant.institution_type,
+                    "currency": m.tenant.currency,
+                    "timezone": m.tenant.timezone,
+                    "is_default": m.is_default,
+                }
+                accessible_tenants.append(t_data)
+                if m.is_default and default_tenant is None:
+                    default_tenant = t_data
+
+            if not default_tenant and accessible_tenants:
+                default_tenant = accessible_tenants[0]
+
+            if not accessible_tenants or not default_tenant:
+                raise serializers.ValidationError(
+                    "Your account is not assigned to any active educational institution. Please contact your administrator."
+                )
 
         data["user"] = UserSerializer(user).data
         data["accessible_tenants"] = accessible_tenants

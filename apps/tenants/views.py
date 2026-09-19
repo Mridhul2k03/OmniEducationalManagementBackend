@@ -27,11 +27,15 @@ class TenantViewSet(viewsets.ModelViewSet):
             return [IsSuperAdmin()]
         elif self.action in ["update", "partial_update"]:
             return [IsInstitutionAdmin()]
+        elif self.action == "list":
+            return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
+        if not self.request.user or not self.request.user.is_authenticated:
+            return Tenant.objects.filter(is_deleted=False, status=Tenant.STATUS_ACTIVE)
         if self.request.user.is_superuser:
-            return Tenant.objects.all()
+            return Tenant.objects.filter(is_deleted=False)
         # Return only tenants where the user has an active membership
         return Tenant.objects.filter(
             memberships__user=self.request.user,

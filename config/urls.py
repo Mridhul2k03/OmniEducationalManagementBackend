@@ -33,6 +33,8 @@ api_v1_patterns = [
     path("communications/", include("apps.communications.urls")),
     # Audit Logs
     path("audit/", include("apps.audit.urls")),
+    # Platform SuperAdmin Control Center
+    path("platform-admin/", include("apps.platform_admin.urls")),
     # OpenAPI 3.0 Documentation
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
     path("docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),

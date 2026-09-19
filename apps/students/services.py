@@ -26,6 +26,9 @@ def admit_student_service(
     4. If enrollment details provided, establishes academic enrollment.
     5. Logs compliance audit trail.
     """
+    if not tenant:
+        raise ValidationError({"tenant": "An active educational institution / tenant is required to admit a student."})
+
     admission_number = student_data.get("admission_number")
     first_name = student_data.get("first_name", "").strip()
     last_name = student_data.get("last_name", "").strip()

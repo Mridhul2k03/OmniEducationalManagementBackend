@@ -144,6 +144,31 @@ class MeView(APIView):
         if tenant:
             active_membership = memberships.filter(tenant=tenant).first()
 
+        accessible_tenants = []
+        if user.is_superuser:
+            all_tenants = Tenant.objects.filter(is_deleted=False)
+            for t in all_tenants:
+                accessible_tenants.append({
+                    "id": str(t.id),
+                    "name": t.name,
+                    "slug": t.slug,
+                    "institution_type": t.institution_type,
+                    "currency": t.currency,
+                    "timezone": t.timezone,
+                    "is_default": str(t.id) == str(tenant.id) if tenant else False,
+                })
+        else:
+            for m in memberships:
+                accessible_tenants.append({
+                    "id": str(m.tenant.id),
+                    "name": m.tenant.name,
+                    "slug": m.tenant.slug,
+                    "institution_type": m.tenant.institution_type,
+                    "currency": m.tenant.currency,
+                    "timezone": m.tenant.timezone,
+                    "is_default": m.is_default,
+                })
+
         return Response({
             "success": True,
             "data": {
@@ -152,9 +177,13 @@ class MeView(APIView):
                     "id": str(tenant.id) if tenant else None,
                     "name": tenant.name if tenant else None,
                     "slug": tenant.slug if tenant else None,
+                    "institution_type": tenant.institution_type if tenant else "school",
+                    "currency": tenant.currency if tenant else "USD",
+                    "timezone": tenant.timezone if tenant else "UTC",
                 } if tenant else None,
-                "active_permissions": list(active_membership.get_permissions()) if active_membership else [],
+                "active_permissions": ["*"] if user.is_superuser else (list(active_membership.get_permissions()) if active_membership else []),
                 "memberships": MembershipSerializer(memberships, many=True).data,
+                "accessible_tenants": accessible_tenants,
             }
         })
 

@@ -2,7 +2,7 @@ from rest_framework import generics, filters
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.audit.models import AuditLog
 from apps.audit.serializers import AuditLogSerializer
-from apps.accounts.permissions import IsInstitutionAdmin
+from apps.accounts.permissions import IsInstitutionAdmin, get_or_resolve_tenant
 
 
 class AuditLogListView(generics.ListAPIView):
@@ -22,9 +22,9 @@ class AuditLogListView(generics.ListAPIView):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return AuditLog.objects.none()
-        if self.request.user.is_superuser and not getattr(self.request, "tenant", None):
+        tenant = get_or_resolve_tenant(self.request)
+        if self.request.user.is_superuser and not tenant:
             return AuditLog.objects.all().select_related("actor", "tenant")
-        tenant = getattr(self.request, "tenant", None)
         if not tenant:
             return AuditLog.objects.none()
-        return AuditLog.objects.filter(tenant=tenant).select_related("actor")
+        return AuditLog.objects.filter(tenant=tenant).select_related("actor", "tenant")

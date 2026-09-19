@@ -2,6 +2,8 @@ from rest_framework import serializers
 from apps.students.models import Student
 from apps.students.services import admit_student_service
 from apps.guardians.models import StudentGuardian
+from apps.tenants.models import Tenant
+from apps.accounts.permissions import get_or_resolve_tenant
 
 
 class StudentGuardianListSerializer(serializers.ModelSerializer):
@@ -17,6 +19,7 @@ class StudentSerializer(serializers.ModelSerializer):
     guardian_links = StudentGuardianListSerializer(many=True, read_only=True)
     email = serializers.CharField(source="user.email", read_only=True, default="")
     user_id = serializers.UUIDField(source="user.id", read_only=True, default=None)
+    avatar_url = serializers.CharField(source="user.avatar_url", read_only=True, default="")
     class_cohort_name = serializers.SerializerMethodField()
     section_name = serializers.SerializerMethodField()
 
@@ -28,45 +31,45 @@ class StudentSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "full_name",
+            "date_of_birth",
+            "gender",
+            "blood_group",
+            "status",
+            "admission_date",
+            "avatar_url",
             "email",
             "user_id",
             "class_cohort_name",
             "section_name",
-            "date_of_birth",
-            "gender",
-            "blood_group",
-            "admission_date",
-            "status",
-            "emergency_contact",
             "guardian_links",
             "created_at",
-            "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at", "email", "user_id"]
+        read_only_fields = ["id", "admission_number", "created_at"]
 
     def get_class_cohort_name(self, obj):
-        latest = obj.enrollments.order_by("-enrolled_date").first()
-        return latest.class_cohort.name if latest else ""
+        enrollment = obj.enrollments.filter(status="enrolled").select_related("class_cohort").first()
+        return enrollment.class_cohort.name if enrollment and enrollment.class_cohort else ""
 
     def get_section_name(self, obj):
-        latest = obj.enrollments.order_by("-enrolled_date").first()
-        return latest.section.name if latest else ""
+        enrollment = obj.enrollments.filter(status="enrolled").select_related("section").first()
+        return enrollment.section.name if enrollment and enrollment.section else ""
 
 
 class StudentAdmissionSerializer(serializers.Serializer):
     """
-    Input serializer for the multi-step admission workflow.
+    Serializer for the multi-step student admission workflow.
+    Accepts student details, optional guardian, and optional class enrollment data.
     """
     # Student Details
-    admission_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
     first_name = serializers.CharField(max_length=150)
     last_name = serializers.CharField(max_length=150)
     email = serializers.EmailField(required=False, allow_blank=True)
-    date_of_birth = serializers.DateField()
-    gender = serializers.ChoiceField(choices=Student.GENDER_CHOICES)
-    blood_group = serializers.CharField(max_length=10, required=False, allow_blank=True)
-    admission_date = serializers.DateField()
-    medical_notes = serializers.CharField(required=False, allow_blank=True)
+    date_of_birth = serializers.DateField(required=False, allow_null=True)
+    gender = serializers.ChoiceField(choices=Student.GENDER_CHOICES, default=Student.GENDER_MALE)
+    blood_group = serializers.CharField(max_length=10, required=False, allow_blank=True, default="")
+    admission_date = serializers.DateField(required=False, allow_null=True)
+    admission_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    tenant_id = serializers.UUIDField(required=False, allow_null=True)
 
     # Optional Guardian Details
     guardian = serializers.DictField(required=False)
@@ -81,8 +84,18 @@ class StudentAdmissionSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         request = self.context.get("request")
-        tenant = request.tenant
-        actor = request.user
+        tenant = get_or_resolve_tenant(request) if request else None
+
+        explicit_tenant_id = validated_data.pop("tenant_id", None)
+        if not tenant and explicit_tenant_id:
+            tenant = Tenant.objects.filter(id=explicit_tenant_id, is_deleted=False).first()
+
+        if not tenant:
+            raise serializers.ValidationError({
+                "tenant": "A valid educational institution / tenant context is required to admit students. Please select an organization."
+            })
+
+        actor = request.user if request else None
 
         guardian_data = validated_data.pop("guardian", None)
         academic_year_id = validated_data.pop("academic_year_id", None)

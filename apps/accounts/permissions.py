@@ -60,6 +60,14 @@ def get_or_resolve_tenant(request):
         set_current_tenant(membership.tenant)
         return membership.tenant
 
+    # If user is superuser with no direct membership, fallback to default active tenant
+    if request.user.is_superuser:
+        tenant = Tenant.objects.filter(is_deleted=False, status=Tenant.STATUS_ACTIVE).first() or Tenant.objects.filter(is_deleted=False).first()
+        if tenant:
+            request.tenant = tenant
+            set_current_tenant(tenant)
+            return tenant
+
     return None
 
 
@@ -78,9 +86,9 @@ class IsTenantMember(BasePermission):
     def has_permission(self, request, view):
         if not (request.user and request.user.is_authenticated):
             return False
+        tenant = get_or_resolve_tenant(request)
         if request.user.is_superuser:
             return True
-        tenant = get_or_resolve_tenant(request)
         return bool(tenant is not None)
 
 
@@ -91,9 +99,9 @@ class IsInstitutionAdmin(BasePermission):
     def has_permission(self, request, view):
         if not (request.user and request.user.is_authenticated):
             return False
+        tenant = get_or_resolve_tenant(request)
         if request.user.is_superuser:
             return True
-        tenant = get_or_resolve_tenant(request)
         if not tenant:
             return False
 
@@ -120,9 +128,13 @@ def HasTenantPermission(required_permission_code: str):
         def has_permission(self, request, view):
             if not (request.user and request.user.is_authenticated):
                 return False
+            
+            # Always ensure tenant context is resolved on request
+            tenant = get_or_resolve_tenant(request)
+
             if request.user.is_superuser:
                 return True
-            tenant = get_or_resolve_tenant(request)
+
             if not tenant:
                 return False
 

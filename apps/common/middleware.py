@@ -133,6 +133,11 @@ class TenantContextMiddleware(MiddlewareMixin):
             if membership:
                 request.tenant = membership.tenant
                 set_current_tenant(membership.tenant)
+            elif request.user.is_superuser:
+                tenant = Tenant.objects.filter(is_deleted=False, status=Tenant.STATUS_ACTIVE).first() or Tenant.objects.filter(is_deleted=False).first()
+                if tenant:
+                    request.tenant = tenant
+                    set_current_tenant(tenant)
 
         return None
 

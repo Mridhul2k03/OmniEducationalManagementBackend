@@ -110,6 +110,10 @@ class MarkViewSet(viewsets.ModelViewSet):
             "student", "exam_subject__subject", "exam_subject__exam"
         )
 
+        exam_param = self.request.query_params.get("exam") or self.request.query_params.get("exam_id")
+        if exam_param:
+            qs = qs.filter(exam_subject__exam_id=exam_param)
+
         # If user is student, only allow seeing their own marks and only for published exams
         if hasattr(user, "student_profile"):
             return qs.filter(student=user.student_profile, exam_subject__exam__is_published=True)
@@ -122,3 +126,4 @@ class MarkViewSet(viewsets.ModelViewSet):
             entered_by=self.request.user,
             created_by=self.request.user,
         )
+
