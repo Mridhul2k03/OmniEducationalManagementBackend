@@ -1796,6 +1796,19 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/auth/logout/:
+    post:
+      operationId: auth_logout_create
+      description: Logs out the user and clears all auth cookies.
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/auth/me/:
     get:
       operationId: auth_me_retrieve
@@ -1848,7 +1861,7 @@ paths:
       - cookieAuth: []
       - {}
       responses:
-        '200':
+        '201':
           description: No response body
   /api/v1/auth/switch-tenant/:
     post:
