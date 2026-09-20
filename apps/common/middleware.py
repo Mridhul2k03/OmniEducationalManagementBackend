@@ -34,9 +34,23 @@ class TenantContextMiddleware(MiddlewareMixin):
     Resolves the tenant context for authenticated users.
     Enforces strict membership verification. Never trusts arbitrary client tenant IDs.
     """
+    # Public endpoints that should never be blocked by tenant context enforcement
+    EXEMPT_PATHS = [
+        "/api/v1/auth/login/",
+        "/api/v1/auth/register-institution/",
+        "/api/v1/auth/refresh/",
+        "/api/v1/auth/logout/",
+        "/api/v1/auth/check/",
+        "/api/v1/health/",
+    ]
+
     def process_request(self, request):
         clear_current_tenant()
         request.tenant = None
+
+        # Skip tenant enforcement for public/auth endpoints
+        if any(request.path.startswith(p) for p in self.EXEMPT_PATHS):
+            return None
 
         # If user is not yet authenticated by Django session, check Authorization header OR access_token cookie
         if not hasattr(request, "user") or not request.user.is_authenticated:
