@@ -61,10 +61,12 @@ class TenantViewSet(viewsets.ModelViewSet):
         """
         Returns the active tenant context for the current request.
         """
-        if not request.tenant:
+        from apps.accounts.permissions import get_or_resolve_tenant
+        tenant = getattr(request, "tenant", None) or get_or_resolve_tenant(request)
+        if not tenant:
             return Response(
                 {"success": False, "error": {"code": "NO_ACTIVE_TENANT", "message": "No active tenant selected."}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        serializer = TenantDetailSerializer(request.tenant)
+        serializer = TenantDetailSerializer(tenant)
         return Response({"success": True, "data": serializer.data})

@@ -41,6 +41,10 @@ def log_audit_event(
 
         user_agent = request.META.get("HTTP_USER_AGENT", "")[:500]
 
+    # Guard against AnonymousUser or invalid actor instances
+    if actor is not None and (not getattr(actor, "is_authenticated", False) or not getattr(actor, "id", None)):
+        actor = None
+
     return AuditLog.objects.create(
         tenant=tenant,
         actor=actor,

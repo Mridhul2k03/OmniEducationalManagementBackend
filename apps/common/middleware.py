@@ -38,16 +38,23 @@ class TenantContextMiddleware(MiddlewareMixin):
         clear_current_tenant()
         request.tenant = None
 
-        # If user is not yet authenticated by Django session, check Authorization: Bearer JWT header
+        # If user is not yet authenticated by Django session, check Authorization header OR access_token cookie
         if not hasattr(request, "user") or not request.user.is_authenticated:
+            token = None
             auth_header = request.headers.get("Authorization", "")
             if auth_header.startswith("Bearer "):
+                token = auth_header.split(" ")[1]
+            elif "access_token" in request.COOKIES:
+                token = request.COOKIES.get("access_token")
+
+            if token:
                 try:
                     from rest_framework_simplejwt.authentication import JWTAuthentication
-                    raw_token = auth_header.split(" ")[1]
                     jwt_auth = JWTAuthentication()
-                    validated_token = jwt_auth.get_validated_token(raw_token)
-                    request.user = jwt_auth.get_user(validated_token)
+                    validated_token = jwt_auth.get_validated_token(token)
+                    user = jwt_auth.get_user(validated_token)
+                    if user and getattr(user, "is_authenticated", False) and getattr(user, "is_active", False):
+                        request.user = user
                 except Exception:
                     pass
 

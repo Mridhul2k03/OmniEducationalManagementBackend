@@ -197,6 +197,10 @@ class PlatformUserViewSet(viewsets.ModelViewSet):
 
         role = Role.objects.filter(tenant=tenant, code=role_code, is_deleted=False).first()
         if not role:
+            from apps.accounts.serializers import bootstrap_tenant_roles_and_permissions
+            bootstrap_tenant_roles_and_permissions(tenant)
+            role = Role.objects.filter(tenant=tenant, code=role_code, is_deleted=False).first()
+        if not role:
             role = Role.objects.filter(is_system_role=True, code=role_code).first()
         if not role:
             role = Role.objects.filter(tenant=tenant).first()

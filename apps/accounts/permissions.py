@@ -73,7 +73,7 @@ def get_or_resolve_tenant(request):
 
 class IsSuperAdmin(BasePermission):
     """
-    Allows access only to global platform superadmins.
+    Allows access only to global platform superadmins (is_superuser=True).
     """
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated and request.user.is_superuser)
@@ -81,27 +81,29 @@ class IsSuperAdmin(BasePermission):
 
 class IsTenantMember(BasePermission):
     """
-    Allows access only to users who are active members of the current tenant context.
+    Allows access to authenticated members of the active tenant context.
     """
     def has_permission(self, request, view):
         if not (request.user and request.user.is_authenticated):
             return False
-        tenant = get_or_resolve_tenant(request)
         if request.user.is_superuser:
             return True
+        tenant = get_or_resolve_tenant(request)
         return bool(tenant is not None)
 
 
-class IsInstitutionAdmin(BasePermission):
+class IsInstitutionSuperAdmin(BasePermission):
     """
-    Allows access to institution administrators or principals of the current tenant.
+    Allows access to Institution Super Admins (full control over the institution)
+    or Global Platform Superadmins.
     """
     def has_permission(self, request, view):
         if not (request.user and request.user.is_authenticated):
             return False
-        tenant = get_or_resolve_tenant(request)
         if request.user.is_superuser:
             return True
+
+        tenant = get_or_resolve_tenant(request)
         if not tenant:
             return False
 
@@ -110,6 +112,33 @@ class IsInstitutionAdmin(BasePermission):
             tenant=tenant,
             status=Membership.STATUS_ACTIVE,
             membership_roles__role__code__in=[
+                Role.CODE_INSTITUTION_SUPER_ADMIN,
+                Role.CODE_SUPER_ADMIN,
+            ],
+            is_deleted=False,
+        ).exists()
+
+
+class IsInstitutionAdmin(BasePermission):
+    """
+    Allows access to Institution Super Admins or Delegated Institution Admins of the current tenant.
+    """
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+        if request.user.is_superuser:
+            return True
+
+        tenant = get_or_resolve_tenant(request)
+        if not tenant:
+            return False
+
+        return Membership.objects.filter(
+            user=request.user,
+            tenant=tenant,
+            status=Membership.STATUS_ACTIVE,
+            membership_roles__role__code__in=[
+                Role.CODE_INSTITUTION_SUPER_ADMIN,
                 Role.CODE_INSTITUTION_ADMIN,
                 Role.CODE_SUPER_ADMIN,
             ],
@@ -120,6 +149,7 @@ class IsInstitutionAdmin(BasePermission):
 def HasTenantPermission(required_permission_code: str):
     """
     Permission factory returning a BasePermission class checking for a specific permission code.
+    Institution Super Admins always possess all permissions within their tenant.
     Example: permission_classes = [HasTenantPermission('students.view')]
     """
     class TenantPermissionCheck(BasePermission):
@@ -128,13 +158,11 @@ def HasTenantPermission(required_permission_code: str):
         def has_permission(self, request, view):
             if not (request.user and request.user.is_authenticated):
                 return False
-            
-            # Always ensure tenant context is resolved on request
-            tenant = get_or_resolve_tenant(request)
 
             if request.user.is_superuser:
                 return True
 
+            tenant = get_or_resolve_tenant(request)
             if not tenant:
                 return False
 
@@ -148,17 +176,41 @@ def HasTenantPermission(required_permission_code: str):
             if not membership:
                 return False
 
-            # Institution Admin has full access to their tenant
-            has_admin_role = membership.membership_roles.filter(
-                role__code__in=[Role.CODE_INSTITUTION_ADMIN, Role.CODE_SUPER_ADMIN]
+            # Institution Super Admin has wildcard full control over all tenant capabilities
+            is_super = membership.membership_roles.filter(
+                role__code__in=[Role.CODE_INSTITUTION_SUPER_ADMIN, Role.CODE_SUPER_ADMIN]
             ).exists()
-            if has_admin_role:
+            if is_super:
                 return True
 
-            # Check granular permission code
-            return self.permission_code in membership.get_permissions()
+            # Delegated admin / staff: verify specific permission code
+            user_perms = membership.get_permissions()
+            if "*" in user_perms or self.permission_code in user_perms:
+                return True
+
+            return False
 
         def __call__(self):
             return self
 
     return TenantPermissionCheck
+
+
+def is_user_institution_superadmin(user, tenant) -> bool:
+    """
+    Returns True if user is a global superuser or holds the institution_super_admin role in the given tenant.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    if not tenant:
+        return False
+    return Membership.objects.filter(
+        user=user,
+        tenant=tenant,
+        status=Membership.STATUS_ACTIVE,
+        membership_roles__role__code__in=[Role.CODE_INSTITUTION_SUPER_ADMIN, Role.CODE_SUPER_ADMIN],
+        is_deleted=False,
+    ).exists()
+

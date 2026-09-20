@@ -57,6 +57,10 @@ def admit_student_service(
 
     with transaction.atomic():
         # 1. Create Student profile
+        # Default admission_date to today if not provided
+        if not student_data.get("admission_date"):
+            student_data["admission_date"] = date.today()
+
         email = student_data.pop("email", None)
         student = Student.objects.create(
             tenant=tenant,
@@ -87,6 +91,17 @@ def admit_student_service(
         if user_created:
             user.set_password("Student123!")
             user.save()
+
+        # Clear any soft-deleted student records that still reference this user
+        # to prevent UNIQUE constraint failure on the OneToOneField
+        existing_active_student = Student.objects.filter(user=user).exclude(id=student.id).first()
+        if existing_active_student:
+            raise ValidationError({
+                "email": f"A user with email '{student_email}' is already linked to an active student record ({existing_active_student.admission_number}). "
+                         f"Please use a different email address."
+            })
+        # Unlink soft-deleted student records pointing to the same user
+        Student.all_objects.filter(user=user, is_deleted=True).update(user=None)
 
         student.user = user
         student.save(update_fields=["user"])

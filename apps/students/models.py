@@ -42,10 +42,10 @@ class Student(TenantScopedModel):
     )
     first_name = models.CharField(max_length=150)
     last_name = models.CharField(max_length=150)
-    date_of_birth = models.DateField()
+    date_of_birth = models.DateField(null=True, blank=True)
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES)
     blood_group = models.CharField(max_length=10, blank=True, default="")
-    admission_date = models.DateField()
+    admission_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ADMITTED, db_index=True)
 
     emergency_contact = models.JSONField(default=dict, blank=True)

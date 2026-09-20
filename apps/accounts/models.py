@@ -160,6 +160,7 @@ class Role(UUIDModel, TimeStampedModel, SoftDeletableModel):
     Role entity. Can be system-wide default (tenant=None) or tenant-customized.
     """
     CODE_SUPER_ADMIN = "super_admin"
+    CODE_INSTITUTION_SUPER_ADMIN = "institution_super_admin"
     CODE_INSTITUTION_ADMIN = "institution_admin"
     CODE_PRINCIPAL = "principal"
     CODE_TEACHER = "teacher"
