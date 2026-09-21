@@ -37,11 +37,16 @@ class TenantContextMiddleware(MiddlewareMixin):
     # Public endpoints that should never be blocked by tenant context enforcement
     EXEMPT_PATHS = [
         "/api/v1/auth/login/",
+        "/api/v1/auth/student-login/",
+        "/api/v1/auth/student-register/",
+        "/api/v1/auth/student-rerequest/",
+        "/api/v1/auth/student-status/",
         "/api/v1/auth/register-institution/",
         "/api/v1/auth/refresh/",
         "/api/v1/auth/logout/",
         "/api/v1/auth/check/",
         "/api/v1/health/",
+        "/api/v1/tenants/",
     ]
 
     def process_request(self, request):

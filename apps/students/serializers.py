@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from apps.students.models import Student
+from apps.students.models import Student, StudentRegistrationRequest
 from apps.students.services import admit_student_service
 from apps.guardians.models import StudentGuardian
 from apps.tenants.models import Tenant
@@ -123,3 +123,91 @@ class StudentAdmissionSerializer(serializers.Serializer):
             request=request,
         )
         return student
+
+
+class StudentRegistrationRequestSerializer(serializers.ModelSerializer):
+    tenant_name = serializers.CharField(source="tenant.name", read_only=True)
+    tenant_slug = serializers.CharField(source="tenant.slug", read_only=True)
+    applicant_name = serializers.CharField(read_only=True)
+    reviewed_by_email = serializers.CharField(source="reviewed_by.email", read_only=True, default="")
+    can_re_request = serializers.SerializerMethodField()
+    re_request_cooldown_remaining_hours = serializers.SerializerMethodField()
+    eligible_re_request_at = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StudentRegistrationRequest
+        fields = [
+            "id",
+            "tenant",
+            "tenant_name",
+            "tenant_slug",
+            "user",
+            "email",
+            "first_name",
+            "last_name",
+            "applicant_name",
+            "phone_number",
+            "admission_number",
+            "grade_or_program",
+            "gender",
+            "date_of_birth",
+            "notes",
+            "status",
+            "last_requested_at",
+            "re_request_count",
+            "reviewed_at",
+            "reviewed_by",
+            "reviewed_by_email",
+            "rejection_reason",
+            "can_re_request",
+            "re_request_cooldown_remaining_hours",
+            "eligible_re_request_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "tenant",
+            "user",
+            "status",
+            "last_requested_at",
+            "re_request_count",
+            "reviewed_at",
+            "reviewed_by",
+            "rejection_reason",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_can_re_request(self, obj):
+        can_re, _, _ = obj.can_re_request()
+        return can_re
+
+    def get_re_request_cooldown_remaining_hours(self, obj):
+        can_re, remaining, _ = obj.can_re_request()
+        if not can_re and remaining:
+            return round(remaining.total_seconds() / 3600, 1)
+        return 0
+
+    def get_eligible_re_request_at(self, obj):
+        from django.conf import settings
+        from datetime import timedelta
+        gap_hours = getattr(settings, "STUDENT_REGISTRATION_REREQUEST_GAP_HOURS", 24)
+        if obj.last_requested_at:
+            return (obj.last_requested_at + timedelta(hours=gap_hours)).isoformat()
+        return None
+
+
+class StudentSelfRegisterSerializer(serializers.Serializer):
+    tenant_id = serializers.CharField(required=True)
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(write_only=True, required=True, min_length=6)
+    first_name = serializers.CharField(max_length=150, required=True)
+    last_name = serializers.CharField(max_length=150, required=True)
+    phone_number = serializers.CharField(max_length=50, required=False, allow_blank=True, default="")
+    admission_number = serializers.CharField(max_length=50, required=True)
+    grade_or_program = serializers.CharField(max_length=150, required=False, allow_blank=True, default="")
+    gender = serializers.ChoiceField(choices=Student.GENDER_CHOICES, default=Student.GENDER_FEMALE)
+    date_of_birth = serializers.DateField(required=False, allow_null=True)
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+

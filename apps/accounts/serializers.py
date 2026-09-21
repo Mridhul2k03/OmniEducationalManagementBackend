@@ -509,7 +509,58 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                     "Your account is not assigned to any active educational institution. Please contact your administrator."
                 )
 
+        from apps.students.models import Student
+        from apps.staff.models import Staff
+
+        # Detect Student Profile
+        student_obj = Student.objects.filter(user=user, is_deleted=False).first()
+        # Detect Staff Profile
+        staff_obj = Staff.objects.filter(user=user, is_deleted=False).first()
+
+        profile_type = "admin"
+        student_data = None
+        staff_data = None
+        role_code = "super_admin" if user.is_superuser else "faculty"
+
+        if student_obj:
+            profile_type = "student"
+            role_code = "student"
+            student_data = {
+                "id": str(student_obj.id),
+                "admission_number": student_obj.admission_number,
+                "full_name": student_obj.full_name,
+                "status": student_obj.status,
+            }
+        elif staff_obj:
+            profile_type = "staff"
+            staff_data = {
+                "id": str(staff_obj.id),
+                "employee_id": staff_obj.employee_id,
+                "designation": staff_obj.designation,
+                "status": staff_obj.status,
+            }
+
+        # Check membership roles for active tenant
+        if default_tenant and "id" in default_tenant:
+            membership = Membership.objects.filter(user=user, tenant_id=default_tenant["id"], is_deleted=False).first()
+            if membership:
+                roles = Role.objects.filter(membership_roles__membership=membership)
+                for r in roles:
+                    if r.code in [Role.CODE_INSTITUTION_SUPER_ADMIN, Role.CODE_SUPER_ADMIN]:
+                        role_code = Role.CODE_INSTITUTION_SUPER_ADMIN
+                        profile_type = "admin"
+                        break
+                if role_code not in [Role.CODE_INSTITUTION_SUPER_ADMIN, Role.CODE_SUPER_ADMIN] and roles.exists():
+                    primary = roles.first()
+                    role_code = primary.code
+                    if primary.code == "student":
+                        profile_type = "student"
+
         data["user"] = UserSerializer(user).data
+        data["role"] = role_code
+        data["profile_type"] = profile_type
+        data["student_profile"] = student_data
+        data["staff_profile"] = staff_data
         data["accessible_tenants"] = accessible_tenants
         data["active_tenant"] = default_tenant
 

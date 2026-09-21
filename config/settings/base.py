@@ -192,7 +192,7 @@ from corsheaders.defaults import default_headers
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
-    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:5175,http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:5175,https://omni-educational-management-fronten.vercel.app,https://3lrrk4tb-8000.inc1.devtunnels.ms").split(",")
+    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:5175,http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:5175,https://omni-educational-management-fronten.vercel.app,https://3lrrk4tb-8003.inc1.devtunnels.ms,https://3lrrk4tb-8000.inc1.devtunnels.ms").split(",")
     if origin.strip()
 ]
 CORS_ALLOWED_ORIGIN_REGEXES = [
@@ -216,3 +216,13 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
+
+# Gemini AI Configuration
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
+# Student Self-Registration & Verification Settings
+# Configurable cooldown gap (in hours) required before a student can re-request verification (default: 24 hours / 1 day)
+STUDENT_REGISTRATION_REREQUEST_GAP_HOURS = int(os.getenv("STUDENT_REGISTRATION_REREQUEST_GAP_HOURS", "24"))
+
+

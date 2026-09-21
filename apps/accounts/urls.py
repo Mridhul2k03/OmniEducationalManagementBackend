@@ -13,6 +13,12 @@ from apps.accounts.views import (
     InstitutionUserViewSet,
     PermissionListView,
 )
+from apps.students.registration_views import (
+    StudentRegisterView,
+    StudentLoginView,
+    StudentReRequestView,
+    StudentCheckStatusView,
+)
 
 router = DefaultRouter()
 router.register(r"roles", RoleViewSet, basename="role")
@@ -28,6 +34,13 @@ urlpatterns = [
     path("auth/check/", AuthCheckView.as_view(), name="auth-check"),
     path("auth/me/", MeView.as_view(), name="auth-me"),
     path("auth/switch-tenant/", SwitchTenantView.as_view(), name="switch-tenant"),
+
+    # Student Auth & Verification Endpoints
+    path("auth/student-register/", StudentRegisterView.as_view(), name="student-register"),
+    path("auth/student-login/", StudentLoginView.as_view(), name="student-login"),
+    path("auth/student-rerequest/", StudentReRequestView.as_view(), name="student-rerequest"),
+    path("auth/student-status/", StudentCheckStatusView.as_view(), name="student-status"),
+
     path("permissions/", PermissionListView.as_view(), name="permission-list"),
     path("", include(router.urls)),
 ]

@@ -35,6 +35,8 @@ api_v1_patterns = [
     path("audit/", include("apps.audit.urls")),
     # Platform SuperAdmin Control Center
     path("platform-admin/", include("apps.platform_admin.urls")),
+    # Gemini AI Educational Services
+    path("ai/", include("apps.common.ai_urls")),
     # OpenAPI 3.0 Documentation
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
     path("docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),

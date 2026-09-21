@@ -252,6 +252,34 @@ class AuthCheckView(APIView):
             else:
                 permissions_list = list(active_membership.get_permissions())
 
+        from apps.students.models import Student
+        from apps.staff.models import Staff
+
+        student_obj = Student.objects.filter(user=user, is_deleted=False).first()
+        staff_obj = Staff.objects.filter(user=user, is_deleted=False).first()
+
+        profile_type = "admin"
+        student_data = None
+        staff_data = None
+
+        if student_obj:
+            profile_type = "student"
+            role_code = "student"
+            student_data = {
+                "id": str(student_obj.id),
+                "admission_number": student_obj.admission_number,
+                "full_name": student_obj.full_name,
+                "status": student_obj.status,
+            }
+        elif staff_obj:
+            profile_type = "staff"
+            staff_data = {
+                "id": str(staff_obj.id),
+                "employee_id": staff_obj.employee_id,
+                "designation": staff_obj.designation,
+                "status": staff_obj.status,
+            }
+
         active_tenant_data = None
         if tenant:
             active_tenant_data = {
@@ -261,6 +289,7 @@ class AuthCheckView(APIView):
                 "institution_type": tenant.institution_type,
                 "currency": tenant.currency,
                 "timezone": tenant.timezone,
+                "subscription_plan": tenant.subscription_reference or "Starter",
             }
 
         return Response({
@@ -269,6 +298,9 @@ class AuthCheckView(APIView):
             "data": {
                 "user": UserSerializer(user).data,
                 "role": role_code,
+                "profile_type": profile_type,
+                "student_profile": student_data,
+                "staff_profile": staff_data,
                 "is_institution_superadmin": is_inst_super,
                 "active_tenant": active_tenant_data,
                 "permissions": permissions_list,
